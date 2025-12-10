@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Driver Route Confirmation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Bootstrap CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+
+  <style>
+    :root {
+      --bg-main: #050816;
+      --card-bg: #111827;
+      --accent: #22c55e;
+      --accent-soft: rgba(34, 197, 94, 0.15);
+      --text-muted: #9ca3af;
+    }
+
+    body {
+      background: radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%);
+      color: #e5e7eb;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+    }
+
+    .page-wrapper {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem 1rem 3rem;
+    }
+
+    h1 {
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .card-glass {
+      background: linear-gradient(
+          135deg,
+          rgba(148, 163, 184, 0.08),
+          rgba(15, 23, 42, 0.95)
+        );
+      border-radius: 1rem;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.9);
+      overflow: hidden;
+    }
+
+    .card-header {
+      background: linear-gradient(90deg, #020617, #0b1120);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+    }
+
+    .routes-list {
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .route-item {
+      border-radius: 0.75rem;
+      border: 1px solid transparent;
+      background: rgba(15, 23, 42, 0.8);
+      color: #e5e7eb;
+      transition: 0.15s ease;
+      text-align: left;
+      width: 100%;
+    }
+
+    .route-item:hover {
+      border-color: rgba(148, 163, 184, 0.7);
+      background: rgba(15, 23, 42, 1);
+      transform: translateY(-1px);
+    }
+
+    .route-item.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.6);
+      background: var(--accent-soft);
+    }
+
+    .route-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .table-dark {
+      --bs-table-bg: transparent;
+    }
+
+    .zone-table-wrapper {
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .badge-status {
+      border-radius: 999px;
+      padding: 0.2rem 0.8rem;
+      font-size: 0.7rem;
+    }
+
+    .badge-pending {
+      background: rgba(252, 211, 77, 0.1);
+      color: #facc15;
+      border: 1px solid rgba(234, 179, 8, 0.4);
+    }
+
+    .badge-collected {
+      background: rgba(34, 197, 94, 0.12);
+      color: #22c55e;
+      border: 1px solid rgba(22, 163, 74, 0.7);
+    }
+
+    .btn-accent {
+      background: var(--accent);
+      border-color: var(--accent);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .btn-accent:disabled {
+      opacity: 0.6;
+    }
+
+    .btn-accent:hover {
+      background: #16a34a;
+      border-color: #16a34a;
+    }
+
+    .toast-container {
+      z-index: 1060;
+    }
+
+    @media (max-width: 768px) {
+      .page-wrapper {
+        padding-top: 1.25rem;
+      }
+
+      h1 {
+        font-size: 1.4rem;
+        text-align: center;
+      }
+
+      .subtitle {
+        text-align: center;
+        margin-bottom: 1rem;
+      }
+
+      .card-header {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 0.75rem;
+      }
+
+      .routes-and-zones {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-wrapper">
+    <header class="mb-4 text-center text-md-start">
+      <h1 class="text-white mb-1">Driver Route Confirmation</h1>
+      <p class="subtitle mb-0">
+        Select a route, collect from all bins in that route, then confirm.
+      </p>
+    </header>
+
+    <!-- MAIN CARD -->
+    <section class="card-glass mb-4">
+      <div
+        class="card-header d-flex justify-content-between align-items-center px-3 px-md-4 py-3"
+      >
+        <div>
+          <div class="text-uppercase text-xs fw-semibold text-secondary">
+            Parameters (example)
+          </div>
+          <div class="text-xs text-muted">
+            Min fill level: <span class="fw-semibold text-white">30%</span> ·
+            Max trucks:
+            <span class="fw-semibold text-white">3</span>
+          </div>
+        </div>
+        <button
+          id="refreshRoutesBtn"
+          class="btn btn-outline-light btn-sm d-flex align-items-center gap-2"
+          type="button"
+        >
+          <span class="spinner-border spinner-border-sm d-none" id="refreshSpin"></span>
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      <div class="p-3 p-md-4">
+        <div class="row g-3 routes-and-zones">
+          <!-- Routes -->
+          <div class="col-md-4">
+            <h6 class="text-secondary text-uppercase small mb-2">
+              Available Routes
+            </h6>
+            <div id="routesList" class="routes-list d-flex flex-column gap-2">
+              <!-- Filled by JS -->
+            </div>
+            <div
+              id="noRoutesMsg"
+              class="text-muted small mt-2 d-none"
+            >
+              No routes available.
+            </div>
+          </div>
+
+          <!-- Zones / bins -->
+          <div class="col-md-8">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="text-secondary text-uppercase small mb-0">
+                Select a route to see its zones
+              </h6>
+              <button
+                id="confirmBtn"
+                class="btn btn-accent btn-sm"
+                type="button"
+                disabled
+              >
+                Confirm Route Collected
+              </button>
+            </div>
+
+            <div class="zone-table-wrapper border rounded-3 border-secondary">
+              <table class="table table-dark table-hover mb-0 align-middle">
+                <thead>
+                  <tr class="text-secondary small">
+                    <th style="width: 30%">Zone</th>
+                    <th style="width: 15%">Bin ID</th>
+                    <th style="width: 20%">Fill Level (%)</th>
+                    <th style="width: 35%">Status</th>
+                  </tr>
+                </thead>
+                <tbody id="zonesTableBody">
+                  <tr>
+                    <td colspan="4" class="text-center text-muted small py-4">
+                      Select a route from the left to view its bins.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Toasts -->
+  <div
+    class="toast-container position-fixed bottom-0 start-50 translate-middle-x mb-3"
+  >
+    <div
+      id="mainToast"
+      class="toast align-items-center text-bg-dark border-0"
+      role="alert"
+      aria-live="assertive"
+      aria-atomic="true"
+    >
+      <div class="d-flex">
+        <div id="toastBody" class="toast-body"></div>
+        <button
+          type="button"
+          class="btn-close btn-close-white me-2 m-auto"
+          data-bs-dismiss="toast"
+          aria-label="Close"
+        ></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // ================= CONFIG =================
+    //:
+   const API_BASE = "https://waste-optimizer-backend.onrender.com";
+
+
+    // ================ STATE ====================
+    let routes = [];
+    let zones = [];
+    let selectedTruckId = null;
+
+    // ============== TOAST HELPER ==============
+    function showToast(message, type = "info") {
+      const toastEl = document.getElementById("mainToast");
+      const toastBody = document.getElementById("toastBody");
+
+      toastBody.textContent = message;
+
+      toastEl.classList.remove("text-bg-dark", "text-bg-success", "text-bg-danger");
+      if (type === "success") toastEl.classList.add("text-bg-success");
+      else if (type === "error") toastEl.classList.add("text-bg-danger");
+      else toastEl.classList.add("text-bg-dark");
+
+      const toast = new bootstrap.Toast(toastEl);
+      toast.show();
+    }
+
+    // ============== RENDER FUNCTIONS ===========
+    function renderRoutes() {
+      const listEl = document.getElementById("routesList");
+      const noRoutesMsg = document.getElementById("noRoutesMsg");
+      listEl.innerHTML = "";
+
+      if (!routes || routes.length === 0) {
+        noRoutesMsg.classList.remove("d-none");
+        return;
+      }
+      noRoutesMsg.classList.add("d-none");
+
+      routes.forEach((r) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className =
+          "route-item d-flex flex-column p-2 px-3 small gap-1";
+
+        if (r.truckId === selectedTruckId) {
+          btn.classList.add("active");
+        }
+
+        const title = document.createElement("div");
+        title.className = "fw-semibold";
+        title.textContent = `Truck ${r.truckId}`;
+
+        const routeStr = (r.nodeSequence || []).join(" → ");
+
+        const meta = document.createElement("div");
+        meta.className =
+          "route-meta d-flex flex-wrap gap-2 justify-content-between";
+        meta.innerHTML = `
+          <span class="text-truncate" style="max-width: 230px">
+            <span class="text-secondary">Route:</span>
+            <span class="text-light">${routeStr || "No sequence"}</span>
+          </span>
+          <span>
+            <span class="text-secondary">Dist:</span>
+            ${r.totalDistanceKm?.toFixed
+              ? r.totalDistanceKm.toFixed(1)
+              : r.totalDistanceKm || "-"} km
+          </span>
+          <span>
+            <span class="text-secondary">Energy:</span>
+            ${r.totalEnergyKWh?.toFixed
+              ? r.totalEnergyKWh.toFixed(1)
+              : r.totalEnergyKWh || "-"} kWh
+          </span>
+        `;
+
+        const statusSpan = document.createElement("span");
+        statusSpan.className = "badge badge-status ms-auto mt-1";
+        if ((r.status || "").toLowerCase() === "collected") {
+          statusSpan.classList.add("badge-collected");
+          statusSpan.textContent = "Collected";
+        } else {
+          statusSpan.classList.add("badge-pending");
+          statusSpan.textContent = "Pending";
+        }
+
+        btn.appendChild(title);
+        btn.appendChild(meta);
+        btn.appendChild(statusSpan);
+
+        btn.addEventListener("click", () => {
+          selectedTruckId = r.truckId;
+          renderRoutes();
+          renderZonesForRoute(selectedTruckId);
+          const confirmBtn = document.getElementById("confirmBtn");
+          confirmBtn.disabled = false;
+        });
+
+        listEl.appendChild(btn);
+      });
+    }
+
+    function renderZonesForRoute(truckId) {
+      const tbody = document.getElementById("zonesTableBody");
+      tbody.innerHTML = "";
+
+      if (!truckId) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="4" class="text-center text-muted small py-4">
+              Select a route from the left to view its bins.
+            </td>
+          </tr>`;
+        return;
+      }
+
+      // Assume backend returns zones/bins with property truckId
+      const routeZones = (zones || []).filter(
+        (z) => String(z.truckId) === String(truckId)
+      );
+
+      if (!routeZones || routeZones.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="4" class="text-center text-muted small py-4">
+              No zone data available for this route.
+            </td>
+          </tr>`;
+        return;
+      }
+
+      routeZones.forEach((z) => {
+        const tr = document.createElement("tr");
+
+        const zoneCell = document.createElement("td");
+        zoneCell.textContent = z.zoneName || z.area || "-";
+
+        const binIdCell = document.createElement("td");
+        binIdCell.textContent = z.id ?? z.binId ?? "-";
+
+        const fillCell = document.createElement("td");
+        const fill = z.fillLevelPercent ?? z.fillLevel ?? z.fill ?? null;
+        fillCell.textContent =
+          fill === null || fill === undefined ? "-" : `${fill} %`;
+
+        const statusCell = document.createElement("td");
+        const span = document.createElement("span");
+        span.className = "badge badge-status";
+        const statusText = (z.status || "Pending").toLowerCase();
+        if (statusText === "collected") {
+          span.classList.add("badge-collected");
+          span.textContent = "Collected";
+        } else {
+          span.classList.add("badge-pending");
+          span.textContent = "Pending";
+        }
+        statusCell.appendChild(span);
+
+        tr.appendChild(zoneCell);
+        tr.appendChild(binIdCell);
+        tr.appendChild(fillCell);
+        tr.appendChild(statusCell);
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ============= DATA LOADING =================
+    async function loadRoutes() {
+      const spin = document.getElementById("refreshSpin");
+      spin.classList.remove("d-none");
+      try {
+        const resp = await fetch(`${API_BASE}/routes`);
+        if (!resp.ok) throw new Error("Failed to load routes");
+        routes = await resp.json();
+        renderRoutes();
+      } catch (err) {
+        console.error(err);
+        showToast("Error loading routes from server", "error");
+      } finally {
+        spin.classList.add("d-none");
+      }
+    }
+
+    async function loadZones() {
+      try {
+        const resp = await fetch(`${API_BASE}/zones`);
+        if (!resp.ok) throw new Error("Failed to load zones");
+        zones = await resp.json();
+        if (selectedTruckId) {
+          renderZonesForRoute(selectedTruckId);
+        }
+      } catch (err) {
+        console.error(err);
+        showToast("Error loading zones from server", "error");
+      }
+    }
+
+    // ============= CONFIRM ROUTE =================
+    async function confirmRouteCollected() {
+      if (!selectedTruckId) {
+        showToast("Please select a route first", "error");
+        return;
+      }
+
+      const confirmBtn = document.getElementById("confirmBtn");
+      confirmBtn.disabled = true;
+      confirmBtn.innerText = "Confirming...";
+
+      try {
+        const resp = await fetch(`${API_BASE}/confirm-route`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ truckId: selectedTruckId }),
+        });
+
+        if (!resp.ok) throw new Error("Failed to confirm route");
+        const data = await resp.json();
+
+        showToast(data.message || "Route confirmed successfully", "success");
+
+        await loadRoutes();
+        await loadZones();
+      } catch (err) {
+        console.error(err);
+        showToast("Failed to confirm route", "error");
+      } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.innerText = "Confirm Route Collected";
+      }
+    }
+
+    // ============= INIT ==========================
+    document.addEventListener("DOMContentLoaded", async () => {
+      document
+        .getElementById("refreshRoutesBtn")
+        .addEventListener("click", async () => {
+          await loadRoutes();
+          await loadZones();
+        });
+
+      document
+        .getElementById("confirmBtn")
+        .addEventListener("click", confirmRouteCollected);
+
+      await loadRoutes();
+      await loadZones();
+    });
+  </script>
+</body>
+</html>

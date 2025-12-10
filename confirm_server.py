@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -93,6 +93,10 @@ def get_zones():
 
     return jsonify(zones)
 
+@app.route("/driver")
+def driver_page():
+    # serve the driver web page
+    return send_from_directory("driver_web", "index.html")
 
 
 @app.route("/confirm-route", methods=["POST"])
