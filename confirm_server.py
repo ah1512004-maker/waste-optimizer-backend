@@ -101,24 +101,41 @@ def driver_page():
 
 @app.route("/confirm-route", methods=["POST"])
 def confirm_route():
-    """Mark route as collected and update its zones."""
-    data = request.get_json(silent=True) or {}
+    """
+    Mark a whole truck route as collected.
+    Body: { "truckId": 1 }
+    """
+    data = request.get_json(force=True) or {}
     truck_id = data.get("truckId")
 
     if truck_id is None:
-        return jsonify({"status": "error", "message": "truckId is required"}), 400
+        return jsonify({"success": False, "message": "truckId is required"}), 400
 
-    # update route status
+    
+    route_found = False
     for r in routes:
         if r["truckId"] == truck_id:
             r["status"] = "Collected"
+            route_found = True
+            break
 
-    # update zones status
+    
+    updated_zones = 0
     for z in zones:
         if z["truckId"] == truck_id:
             z["status"] = "Collected"
+            updated_zones += 1
 
-    return jsonify({"status": "ok", "message": "Route confirmed successfully"})
+    if not route_found:
+        return jsonify({
+            "success": False,
+            "message": f"No route found for truckId={truck_id}"
+        }), 404
+
+    return jsonify({
+        "success": True,
+        "message": f"Route {truck_id} confirmed, {updated_zones} zones marked as collected"
+    })
 
 
 # Render / gunicorn entrypoint
