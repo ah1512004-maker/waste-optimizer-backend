@@ -100,44 +100,36 @@ def driver_page():
 
 @app.route("/confirm-route", methods=["POST"])
 def confirm_route():
-    """Mark a truck route (and its zones) as collected."""
+    """
+    Mark a truck route as collected AND update all its zones to Collected.
+    Body: { "truckId": 1 }
+    """
     data = request.get_json() or {}
     truck_id = data.get("truckId")
 
     if truck_id is None:
-        return jsonify({"message": "truckId is required"}), 400
+        return jsonify({"error": "truckId is required"}), 400
 
-    # 
-    try:
-        truck_id = int(truck_id)
-    except ValueError:
-        return jsonify({"message": "truckId must be an integer"}), 400
-
-   
+    # نضمن إننا بنشتغل على ال variables الجلوبال
     global routes, zones
 
-    
+    # 1) نعدّل حالة الـ route نفسه
     route_found = False
     for r in routes:
-        if int(r.get("truckId")) == truck_id:
+        if r.get("truckId") == truck_id:
             r["status"] = "Collected"
             route_found = True
-
-    # 2
-    zones_updated = 0
-    for z in zones:
-        if int(z.get("truckId")) == truck_id:
-            z["status"] = "Collected"
-            zones_updated += 1
+            break
 
     if not route_found:
-        return jsonify({"message": f"Truck {truck_id} not found"}), 404
+        return jsonify({"error": "Route not found"}), 404
 
-    return jsonify({
-        "message": "Route confirmed successfully",
-        "truckId": truck_id,
-        "zonesUpdated": zones_updated,
-    })
+    # 2) نعدّل كل الـ zones اللي ليها نفس الـ truckId
+    for z in zones:
+        if z.get("truckId") == truck_id:
+            z["status"] = "Collected"
+
+    return jsonify({"message": "Route and zones updated successfully"})
 
 
 # Render / gunicorn entrypoint
