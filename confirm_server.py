@@ -98,43 +98,45 @@ def driver_page():
     # serve the driver web page
     return send_from_directory("driver_web", "index.html")
 
-
 @app.route("/confirm-route", methods=["POST"])
 def confirm_route():
-    """
-    Mark a whole truck route as collected.
-    Body: { "truckId": 1 }
-    """
-    data = request.get_json(force=True) or {}
+    """Mark a truck route (and its zones) as collected."""
+    data = request.get_json() or {}
     truck_id = data.get("truckId")
 
     if truck_id is None:
-        return jsonify({"success": False, "message": "truckId is required"}), 400
+        return jsonify({"message": "truckId is required"}), 400
+
+    # 
+    try:
+        truck_id = int(truck_id)
+    except ValueError:
+        return jsonify({"message": "truckId must be an integer"}), 400
+
+   
+    global routes, zones
 
     
     route_found = False
     for r in routes:
-        if r["truckId"] == truck_id:
+        if int(r.get("truckId")) == truck_id:
             r["status"] = "Collected"
             route_found = True
-            break
 
-    
-    updated_zones = 0
+    # 2
+    zones_updated = 0
     for z in zones:
-        if z["truckId"] == truck_id:
+        if int(z.get("truckId")) == truck_id:
             z["status"] = "Collected"
-            updated_zones += 1
+            zones_updated += 1
 
     if not route_found:
-        return jsonify({
-            "success": False,
-            "message": f"No route found for truckId={truck_id}"
-        }), 404
+        return jsonify({"message": f"Truck {truck_id} not found"}), 404
 
     return jsonify({
-        "success": True,
-        "message": f"Route {truck_id} confirmed, {updated_zones} zones marked as collected"
+        "message": "Route confirmed successfully",
+        "truckId": truck_id,
+        "zonesUpdated": zones_updated,
     })
 
 
