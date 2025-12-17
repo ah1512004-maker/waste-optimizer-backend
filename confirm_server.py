@@ -394,16 +394,26 @@ def get_routes():
     return jsonify(routes)
 
 
-@app.route("/zones", methods=["GET"])
-def get_zones():
+@app.route("/next-zone", methods=["GET"])
+def get_next_zone():
     """
-    Return ALL zones (global list).
-    Optional query param: ?truckId=1
+    Return the next pending zone for a given truck
+    based on the route order.
     """
     truck_id = request.args.get("truckId", type=int)
+
     if truck_id is None:
-        return jsonify(zones)
-    return jsonify([z for z in zones if z.get("truckId") == truck_id])
+        return jsonify({"error": "truckId is required"}), 400
+
+    zone = next_pending_zone_for_truck(truck_id)
+
+    if not zone:
+        return jsonify({
+            "message": "No pending zones left for this truck",
+            "zone": None
+        })
+
+    return jsonify({"zone": zone})
 
 
 @app.route("/truck-state", methods=["GET"])
