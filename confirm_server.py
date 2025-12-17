@@ -1,16 +1,10 @@
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit
 import os
 
 
 app = Flask(__name__)
 CORS(app)  # allow requests from any origin (localhost:5500, mobile, ...)
-socketio = SocketIO(
-    app,
-    cors_allowed_origins="*",
-    async_mode="eventlet"
-)
 
 # -----------------------------
 # Configuration (from your PDF assumptions)
@@ -361,20 +355,12 @@ def confirm_route():
     for z in zones:
         if z.get("truckId") == truck_id:
             z["status"] = "Collected"
-    socketio.emit("routes_updated", routes)
-    socketio.emit("zones_updated", zones)
 
     update_route_status(truck_id)
 
     return jsonify({"message": "Route and zones updated successfully", "route": route})
 
-@socketio.on("connect")
-def on_connect():
-    emit("routes_updated", routes)
-    emit("zones_updated", zones)
 
 # Render / gunicorn entrypoint
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "5000"))
-    socketio.run(app, host="0.0.0.0", port=port)
-
+    app.run(host="0.0.0.0", port=5000)
