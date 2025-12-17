@@ -369,6 +369,55 @@ def reset_demo():
     truck_state = {}
     return jsonify({"message": "Demo reset: all zones/routes set to Pending"}), 200
 
+@app.route("/simulate", methods=["GET"])
+def simulate():
+    """
+    Compatibility endpoint for the Desktop App.
+    Some UI versions call /simulate to load dashboard summary + routes + zones.
+
+    Returns:
+      {
+        "totalBins": int,
+        "totalTrucks": int,
+        "routes": [...],
+        "zones": [...],
+        "energyBeforeKWh": float,
+        "energyAfterKWh": float,
+        "savingPercent": float
+      }
+    """
+    # Ensure truck states exist
+    for r in routes:
+        init_truck_state_if_needed(r["truckId"])
+
+    total_bins = len(zones)
+    total_trucks = len(routes)
+
+    # "After" energy = current planned energy (sum of routes energy)
+    energy_after = 0.0
+    for r in routes:
+        try:
+            energy_after += float(r.get("totalEnergyKWh", 0.0))
+        except Exception:
+            pass
+
+    # "Before" energy: demo baseline (you can replace with real baseline later)
+    # Simple assumption: before is 1.25x after (25% worse)
+    energy_before = energy_after * 1.25 if energy_after > 0 else 0.0
+
+    saving_percent = 0.0
+    if energy_before > 0:
+        saving_percent = round((energy_before - energy_after) / energy_before * 100.0, 2)
+
+    return jsonify({
+        "totalBins": total_bins,
+        "totalTrucks": total_trucks,
+        "routes": routes,
+        "zones": zones,
+        "energyBeforeKWh": round(energy_before, 2),
+        "energyAfterKWh": round(energy_after, 2),
+        "savingPercent": saving_percent
+    })
 
 # Optional: serve driver web page locally (not used by GitHub Pages)
 @app.route("/driver")
