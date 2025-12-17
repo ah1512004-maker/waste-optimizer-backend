@@ -1,34 +1,23 @@
-from __future__ import annotations
-
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
-
-# ------------------------------------------------------------
-# Flask app setup
-# ------------------------------------------------------------
 app = Flask(__name__)
-CORS(app)  # Allow requests from any origin (Desktop app, GitHub pages, etc.)
+CORS(app)
 
-
-# ------------------------------------------------------------
-# Model / parameters (editable)
-# ------------------------------------------------------------
+# -----------------------------
+# Configuration / constants
+# -----------------------------
 ALPHA_KWH_PER_KM = 0.86
-# Small weight-energy factor (tunable). If you have the real equation from PDF, adjust this.
-BETA_KWH_PER_KG_KM = ALPHA_KWH_PER_KM / 10000.0
-
+BETA_KWH_PER_KG_KM = ALPHA_KWH_PER_KM / 10000  # simple extension (demo)
 MAX_BATTERY_KWH = 100.0
 MIN_BATTERY_KWH = 20.0
 MAX_LOAD_KG = 5000.0
 
 DEPOT_NAME = "Parking"
 
-
-# ------------------------------------------------------------
+# -----------------------------
 # Demo data (routes + zones)
-# IMPORTANT: Keep binIds consistent with route nodeSequence.
-# ------------------------------------------------------------
+# -----------------------------
 routes = [
     {
         "truckId": 1,
@@ -56,7 +45,7 @@ routes = [
     },
 ]
 
-# Each zone must have a unique integer id for reliable confirmation
+# Each zone has a unique integer id for reliable confirmation
 zones = [
     # Truck 1
     {"id": 101, "truckId": 1, "zone": "Zone A1", "binId": 61, "fillLevelPercent": 80, "estimatedWeightKg": 35.0, "status": "Pending"},
@@ -76,15 +65,14 @@ zones = [
     {"id": 304, "truckId": 3, "zone": "Zone F1", "binId": 99, "fillLevelPercent": 40, "estimatedWeightKg": 35.0, "status": "Pending"},
 ]
 
+# -----------------------------
+# Server-side truck state (Digital Twin)
+# -----------------------------
+truck_state = {}  # truckId -> state dict
 
-# ------------------------------------------------------------
-# Digital Twin state (server-side truth)
-# ------------------------------------------------------------
-truck_state: dict[int, dict] = {}
 
-
-def init_truck_state_if_needed(truck_id: int) -> None:
-    """Initialize a truck state once (server-side digital twin)."""
+def init_truck_state_if_needed(truck_id: int):
+    """Initialize truck state once."""
     if truck_id not in truck_state:
         truck_state[truck_id] = {
             "truckId": truck_id,
@@ -92,34 +80,34 @@ def init_truck_state_if_needed(truck_id: int) -> None:
             "cumDistanceKm": 0.0,
             "cumCollectedWeightKg": 0.0,
             "cumEnergyKWh": 0.0,
-            "batteryKWh": float(MAX_BATTERY_KWH),
+            "batteryKWh": MAX_BATTERY_KWH,
             "fillRatio": 0.0,
             "efficiencyKWhPerKg": 0.0,
             "rangeLeftKm": (MAX_BATTERY_KWH / ALPHA_KWH_PER_KM) * 0.8,  # safety margin
         }
 
 
-def get_route_for_truck(truck_id: int) -> dict | None:
+def get_route_for_truck(truck_id: int):
     for r in routes:
         if r.get("truckId") == truck_id:
             return r
     return None
 
 
-def get_zones_for_truck(truck_id: int) -> list[dict]:
+def get_zones_for_truck(truck_id: int):
     return [z for z in zones if z.get("truckId") == truck_id]
 
 
-def next_pending_zone_for_truck(truck_id: int) -> dict | None:
+def next_pending_zone_for_truck(truck_id: int):
     """
-    Return the next pending zone based on the route nodeSequence order.
-    We take route order, then return the first zone whose status is Pending.
+    Determine the next pending zone based on the route nodeSequence order.
     """
     route = get_route_for_truck(truck_id)
     if not route:
         return None
 
-    ordered_bins: list[int] = []
+    # Extract ordered binIds from route (excluding depot)
+    ordered_bins = []
     for node in route.get("nodeSequence", []):
         if node == DEPOT_NAME:
             continue
@@ -128,10 +116,11 @@ def next_pending_zone_for_truck(truck_id: int) -> dict | None:
         except ValueError:
             continue
 
-    tz = get_zones_for_truck(truck_id)
+    truck_zones = get_zones_for_truck(truck_id)
 
+    # Find first pending zone in route order
     for bin_id in ordered_bins:
-        for z in tz:
+        for z in truck_zones:
             if z.get("binId") == bin_id and z.get("status") == "Pending":
                 return z
 
@@ -141,66 +130,54 @@ def next_pending_zone_for_truck(truck_id: int) -> dict | None:
 def calculate_distance_km(current_loc: str, next_bin_id: int) -> float:
     """
     Placeholder distance function.
-    Replace with:
-      - Dist matrix from your dataset, or
-      - Haversine using GPS coords, etc.
+    Replace with real distance matrix or GPS-based computation if needed.
     """
-    # Simple mock: fixed distance per hop
     return 2.5
 
 
 def calculate_energy_kwh(distance_km: float, carried_weight_kg: float) -> float:
     """
-    Energy model:
-      E = alpha * d + beta * d * current_load
+    Simple energy model:
+    - Base depends on distance
+    - Additional depends on carried weight
     """
     base = ALPHA_KWH_PER_KM * distance_km
     weight_part = BETA_KWH_PER_KG_KM * distance_km * carried_weight_kg
     return base + weight_part
 
 
-def update_route_status(truck_id: int) -> None:
-    """Update route status based on its zones completion."""
+def update_route_status(truck_id: int):
+    """Update route status based on zone completion."""
     route = get_route_for_truck(truck_id)
     if not route:
         return
 
-    tz = get_zones_for_truck(truck_id)
-    if tz and all(z.get("status") == "Collected" for z in tz):
+    truck_zones = get_zones_for_truck(truck_id)
+    if len(truck_zones) == 0:
+        route["status"] = "Pending"
+        return
+
+    if all(z.get("status") == "Collected" for z in truck_zones):
         route["status"] = "Collected"
-    elif any(z.get("status") == "Collected" for z in tz):
+    elif any(z.get("status") == "Collected" for z in truck_zones):
         route["status"] = "InProgress"
     else:
         route["status"] = "Pending"
 
 
-def reset_all() -> None:
-    """Reset routes, zones, and truck_state to initial values for demo/testing."""
-    # Reset zones
-    for z in zones:
-        z["status"] = "Pending"
-
-    # Reset routes
-    for r in routes:
-        r["status"] = "Pending"
-
-    # Reset digital twin
-    truck_state.clear()
-
-
-# ------------------------------------------------------------
+# -----------------------------
 # API endpoints
-# ------------------------------------------------------------
-@app.route("/", methods=["GET"])
+# -----------------------------
+@app.route("/")
 def index():
-    return jsonify({"message": "Waste Optimizer backend is running"})
+    return jsonify({"message": "Confirm server is running"})
 
 
 @app.route("/routes", methods=["GET"])
 def get_routes():
-    """Return all routes for UI."""
+    """Return all routes."""
     for r in routes:
-        init_truck_state_if_needed(int(r["truckId"]))
+        init_truck_state_if_needed(r["truckId"])
     return jsonify(routes)
 
 
@@ -208,7 +185,7 @@ def get_routes():
 def get_zones():
     """
     Return all zones.
-    Optional query: ?truckId=1
+    Optional query: /zones?truckId=1
     """
     truck_id = request.args.get("truckId", type=int)
     if truck_id is None:
@@ -218,12 +195,9 @@ def get_zones():
 
 @app.route("/truck-state", methods=["GET"])
 def get_truck_state():
-    """
-    Return server-side truck digital twin state.
-    Optional query: ?truckId=1
-    """
+    """Return live server-side truck state."""
     for r in routes:
-        init_truck_state_if_needed(int(r["truckId"]))
+        init_truck_state_if_needed(r["truckId"])
 
     truck_id = request.args.get("truckId", type=int)
     if truck_id is None:
@@ -236,8 +210,8 @@ def get_truck_state():
 @app.route("/next-zone", methods=["GET"])
 def get_next_zone():
     """
-    Return the next pending zone for a given truck based on route order.
-    Query: /next-zone?truckId=1
+    Return the next pending zone for a truck.
+    Example: /next-zone?truckId=1
     """
     truck_id = request.args.get("truckId", type=int)
     if truck_id is None:
@@ -253,27 +227,21 @@ def get_next_zone():
 @app.route("/confirm-zone", methods=["POST"])
 def confirm_zone():
     """
-    Manual confirmation (zone-by-zone).
+    Confirm ONE zone (bin-by-bin).
     Body:
       { "truckId": 1, "zoneId": 101 }
 
     Rules:
     - Zone must belong to truck
-    - Zone must be the NEXT pending zone in the route order
-    - Update zone status + digital twin + route status
+    - Zone must be the next pending zone in route order
+    - Update zone status + truck state + route status
     """
-    data = request.get_json(silent=True) or {}
+    data = request.get_json() or {}
     truck_id = data.get("truckId")
     zone_id = data.get("zoneId")
 
     if truck_id is None or zone_id is None:
         return jsonify({"error": "truckId and zoneId are required"}), 400
-
-    try:
-        truck_id = int(truck_id)
-        zone_id = int(zone_id)
-    except Exception:
-        return jsonify({"error": "truckId and zoneId must be integers"}), 400
 
     init_truck_state_if_needed(truck_id)
 
@@ -281,70 +249,66 @@ def confirm_zone():
     if not route:
         return jsonify({"error": "Route not found for this truckId"}), 404
 
-    # Find the requested zone
-    zone = next((z for z in zones if int(z.get("id")) == zone_id), None)
+    # Find the zone by id
+    zone = next((z for z in zones if z.get("id") == zone_id), None)
     if not zone:
         return jsonify({"error": "Zone not found"}), 404
 
-    # Validate ownership
-    if int(zone.get("truckId")) != truck_id:
+    # Ownership validation
+    if zone.get("truckId") != truck_id:
         return jsonify({"error": "Zone does not belong to this truckId"}), 400
 
-    # Validate status
+    # Status validation
     if zone.get("status") != "Pending":
         return jsonify({"error": "Zone is not Pending"}), 400
 
-    # Validate it is the next pending zone
+    # Enforce next-by-route order
     expected = next_pending_zone_for_truck(truck_id)
     if not expected:
         return jsonify({"error": "No pending zones left for this truck"}), 400
-
-    if int(expected.get("id")) != zone_id:
+    if expected.get("id") != zone_id:
         return jsonify({
             "error": "This is not the next pending zone in the route order",
             "expectedNextZoneId": expected.get("id"),
             "expectedNextBinId": expected.get("binId"),
         }), 400
 
-    # ---- Digital twin update (travel + energy + collect) ----
+    # Simulate travel + energy consumption (server-side)
     state = truck_state[truck_id]
-
-    distance_km = calculate_distance_km(str(state["currentLocation"]), int(zone["binId"]))
-    energy_kwh = calculate_energy_kwh(distance_km, float(state["cumCollectedWeightKg"]))
+    distance_km = calculate_distance_km(state["currentLocation"], int(zone["binId"]))
+    energy_kwh = calculate_energy_kwh(distance_km, state["cumCollectedWeightKg"])
 
     # Battery safety check
-    if float(state["batteryKWh"]) - energy_kwh < float(MIN_BATTERY_KWH):
+    if state["batteryKWh"] - energy_kwh < MIN_BATTERY_KWH:
         return jsonify({
             "error": "Battery would drop below MIN_BATTERY after this move",
             "batteryKWh": state["batteryKWh"],
             "neededEnergyKWh": energy_kwh,
-            "minBatteryKWh": MIN_BATTERY_KWH,
+            "minBatteryKWh": MIN_BATTERY_KWH
         }), 400
 
-    # Move updates
-    state["cumDistanceKm"] = float(state["cumDistanceKm"]) + float(distance_km)
-    state["cumEnergyKWh"] = float(state["cumEnergyKWh"]) + float(energy_kwh)
-    state["batteryKWh"] = float(state["batteryKWh"]) - float(energy_kwh)
+    # Update state (movement)
+    state["cumDistanceKm"] += distance_km
+    state["cumEnergyKWh"] += energy_kwh
+    state["batteryKWh"] -= energy_kwh
 
-    # Collect updates
+    # Update state (collection)
     collected_weight = float(zone.get("estimatedWeightKg", 0.0))
-    state["cumCollectedWeightKg"] = float(state["cumCollectedWeightKg"]) + collected_weight
+    state["cumCollectedWeightKg"] += collected_weight
 
     # Capacity check
-    if float(state["cumCollectedWeightKg"]) > float(MAX_LOAD_KG):
+    if state["cumCollectedWeightKg"] > MAX_LOAD_KG:
         return jsonify({
             "error": "Capacity exceeded after collecting this zone",
             "cumCollectedWeightKg": state["cumCollectedWeightKg"],
-            "maxLoadKg": MAX_LOAD_KG,
+            "maxLoadKg": MAX_LOAD_KG
         }), 400
 
-    # Update KPIs
-    state["fillRatio"] = float(state["cumCollectedWeightKg"]) / float(MAX_LOAD_KG) if MAX_LOAD_KG > 0 else 0.0
-    denom = max(float(state["cumCollectedWeightKg"]), 1.0)
-    state["efficiencyKWhPerKg"] = float(state["cumEnergyKWh"]) / denom
-    state["rangeLeftKm"] = (float(state["batteryKWh"]) / float(ALPHA_KWH_PER_KM)) * 0.8
-
-    # Update current location
+    # Update derived KPIs
+    state["fillRatio"] = state["cumCollectedWeightKg"] / MAX_LOAD_KG if MAX_LOAD_KG > 0 else 0.0
+    denom = max(state["cumCollectedWeightKg"], 1.0)
+    state["efficiencyKWhPerKg"] = state["cumEnergyKWh"] / denom
+    state["rangeLeftKm"] = (state["batteryKWh"] / ALPHA_KWH_PER_KM) * 0.8
     state["currentLocation"] = str(zone["binId"])
 
     # Mark zone collected
@@ -361,141 +325,56 @@ def confirm_zone():
     })
 
 
+@app.route("/confirm-route", methods=["POST"])
+def confirm_route():
+    """
+    Demo helper:
+    Mark a whole truck route as collected and set all its zones to Collected.
+    Body: { "truckId": 1 }
+    """
+    data = request.get_json() or {}
+    truck_id = data.get("truckId")
+
+    if truck_id is None:
+        return jsonify({"error": "truckId is required"}), 400
+
+    route = get_route_for_truck(truck_id)
+    if not route:
+        return jsonify({"error": "Route not found"}), 404
+
+    for z in zones:
+        if z.get("truckId") == truck_id:
+            z["status"] = "Collected"
+
+    update_route_status(truck_id)
+    init_truck_state_if_needed(truck_id)
+
+    return jsonify({"message": "Route and zones updated successfully", "route": route})
+
+
 @app.route("/reset", methods=["POST"])
-def reset_endpoint():
+def reset_demo():
     """
-    Reset everything to initial Pending state.
-    Useful for demos.
+    Reset all routes/zones to Pending and clear truck_state.
+    This fixes the 'always Collected' issue on Render (in-memory state).
     """
-    reset_all()
-    return jsonify({"message": "Reset done"})
+    global truck_state
 
-
-@app.route("/simulate", methods=["POST"])
-def simulate():
-    """
-    OPTIONAL: run an automatic step-by-step simulation on the server.
-
-    Body examples:
-      { "reset": true, "maxSteps": 999 }
-
-    Behavior:
-    - If reset=true: reset first
-    - Then, repeatedly confirm the next zone for each truck (round-robin)
-      until maxSteps reached or all zones collected.
-
-    Returns a summary useful for your Desktop Results page.
-    """
-    data = request.get_json(silent=True) or {}
-    do_reset = bool(data.get("reset", False))
-    max_steps = int(data.get("maxSteps", 999))
-
-    if do_reset:
-        reset_all()
-
-    # Ensure truck states exist
     for r in routes:
-        init_truck_state_if_needed(int(r["truckId"]))
+        r["status"] = "Pending"
 
-    steps = []
-    step_count = 0
+    for z in zones:
+        z["status"] = "Pending"
 
-    # Round-robin across trucks
-    truck_ids = [int(r["truckId"]) for r in routes]
-
-    while step_count < max_steps:
-        progressed = False
-
-        for tid in truck_ids:
-            nz = next_pending_zone_for_truck(tid)
-            if not nz:
-                continue
-
-            # Internally perform the same logic as confirm-zone (without re-validating next-zone)
-            state = truck_state[tid]
-            distance_km = calculate_distance_km(str(state["currentLocation"]), int(nz["binId"]))
-            energy_kwh = calculate_energy_kwh(distance_km, float(state["cumCollectedWeightKg"]))
-
-            if float(state["batteryKWh"]) - energy_kwh < float(MIN_BATTERY_KWH):
-                steps.append({
-                    "truckId": tid,
-                    "event": "BatteryStop",
-                    "batteryKWh": state["batteryKWh"],
-                    "neededEnergyKWh": energy_kwh,
-                })
-                continue
-
-            # Apply move
-            state["cumDistanceKm"] = float(state["cumDistanceKm"]) + float(distance_km)
-            state["cumEnergyKWh"] = float(state["cumEnergyKWh"]) + float(energy_kwh)
-            state["batteryKWh"] = float(state["batteryKWh"]) - float(energy_kwh)
-
-            # Apply collect
-            collected_weight = float(nz.get("estimatedWeightKg", 0.0))
-            state["cumCollectedWeightKg"] = float(state["cumCollectedWeightKg"]) + collected_weight
-
-            if float(state["cumCollectedWeightKg"]) > float(MAX_LOAD_KG):
-                steps.append({
-                    "truckId": tid,
-                    "event": "CapacityStop",
-                    "cumCollectedWeightKg": state["cumCollectedWeightKg"],
-                    "maxLoadKg": MAX_LOAD_KG,
-                })
-                continue
-
-            state["fillRatio"] = float(state["cumCollectedWeightKg"]) / float(MAX_LOAD_KG) if MAX_LOAD_KG > 0 else 0.0
-            denom = max(float(state["cumCollectedWeightKg"]), 1.0)
-            state["efficiencyKWhPerKg"] = float(state["cumEnergyKWh"]) / denom
-            state["rangeLeftKm"] = (float(state["batteryKWh"]) / float(ALPHA_KWH_PER_KM)) * 0.8
-            state["currentLocation"] = str(nz["binId"])
-
-            # Mark zone collected
-            nz["status"] = "Collected"
-            update_route_status(tid)
-
-            steps.append({
-                "truckId": tid,
-                "zoneId": nz["id"],
-                "binId": nz["binId"],
-                "distanceKm": distance_km,
-                "energyKWh": energy_kwh,
-                "batteryKWh": state["batteryKWh"],
-                "cumEnergyKWh": state["cumEnergyKWh"],
-                "cumDistanceKm": state["cumDistanceKm"],
-                "cumCollectedWeightKg": state["cumCollectedWeightKg"],
-            })
-
-            step_count += 1
-            progressed = True
-
-            if step_count >= max_steps:
-                break
-
-        # Stop if nothing progressed (all done or blocked)
-        if not progressed:
-            break
-
-    # Build summary
-    total_energy = sum(float(truck_state[tid]["cumEnergyKWh"]) for tid in truck_state)
-    total_distance = sum(float(truck_state[tid]["cumDistanceKm"]) for tid in truck_state)
-    collected_all = all(z.get("status") == "Collected" for z in zones)
-
-    return jsonify({
-        "message": "Simulation finished",
-        "steps": steps,
-        "summary": {
-            "totalEnergyKWh": total_energy,
-            "totalDistanceKm": total_distance,
-            "allCollected": collected_all,
-        },
-        "routes": routes,
-        "zones": zones,
-        "truckState": list(truck_state.values()),
-    })
+    truck_state = {}
+    return jsonify({"message": "Demo reset: all zones/routes set to Pending"}), 200
 
 
-# ------------------------------------------------------------
-# Local dev entrypoint
-# ------------------------------------------------------------
+# Optional: serve driver web page locally (not used by GitHub Pages)
+@app.route("/driver")
+def driver_page():
+    return send_from_directory("driver_web", "index.html")
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000)
