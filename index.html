@@ -24,8 +24,7 @@
       background: radial-gradient(circle at top, #0f172a 0, #020617 45%, #000 100%);
       color: #e5e7eb;
       min-height: 100vh;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     .page-wrapper {
@@ -45,11 +44,7 @@
     }
 
     .card-glass {
-      background: linear-gradient(
-          135deg,
-          rgba(148, 163, 184, 0.08),
-          rgba(15, 23, 42, 0.95)
-        );
+      background: linear-gradient(135deg, rgba(148, 163, 184, 0.08), rgba(15, 23, 42, 0.95));
       border-radius: 1rem;
       border: 1px solid rgba(148, 163, 184, 0.25);
       box-shadow: 0 18px 45px rgba(15, 23, 42, 0.9);
@@ -167,54 +162,51 @@
     }
   </style>
 </head>
+
 <body>
   <div class="page-wrapper">
     <header class="mb-4 text-center text-md-start">
       <h1 class="text-white mb-1">Driver Route Confirmation</h1>
       <p class="subtitle mb-0">
-        Select a route, collect from all bins in that route, then confirm.
+        Select a route, then confirm bins one-by-one (server calculates equations).
       </p>
     </header>
 
     <!-- MAIN CARD -->
     <section class="card-glass mb-4">
-      <div
-        class="card-header d-flex justify-content-between align-items-center px-3 px-md-4 py-3"
-      >
+      <div class="card-header d-flex justify-content-between align-items-center px-3 px-md-4 py-3">
         <div>
           <div class="text-uppercase text-xs fw-semibold text-secondary">
             Parameters (example)
           </div>
           <div class="text-xs text-muted">
             Min fill level: <span class="fw-semibold text-white">30%</span> ·
-            Max trucks:
-            <span class="fw-semibold text-white">3</span>
+            Max trucks: <span class="fw-semibold text-white">3</span>
           </div>
         </div>
-        <button
-          id="refreshRoutesBtn"
-          class="btn btn-outline-light btn-sm d-flex align-items-center gap-2"
-          type="button"
-        >
-          <span class="spinner-border spinner-border-sm d-none" id="refreshSpin"></span>
-          <span>Refresh</span>
-        </button>
+
+        <div class="d-flex gap-2">
+          <button id="refreshRoutesBtn" class="btn btn-outline-light btn-sm d-flex align-items-center gap-2" type="button">
+            <span class="spinner-border spinner-border-sm d-none" id="refreshSpin"></span>
+            <span>Refresh</span>
+          </button>
+
+          <button id="resetBtn" class="btn btn-outline-warning btn-sm" type="button">
+            Reset Demo
+          </button>
+        </div>
       </div>
 
       <div class="p-3 p-md-4">
         <div class="row g-3 routes-and-zones">
+
           <!-- Routes -->
           <div class="col-md-4">
-            <h6 class="text-secondary text-uppercase small mb-2">
-              Available Routes
-            </h6>
-            <div id="routesList" class="routes-list d-flex flex-column gap-2">
-              <!-- Filled by JS -->
-            </div>
-            <div
-              id="noRoutesMsg"
-              class="text-muted small mt-2 d-none"
-            >
+            <h6 class="text-secondary text-uppercase small mb-2">Available Routes</h6>
+
+            <div id="routesList" class="routes-list d-flex flex-column gap-2"></div>
+
+            <div id="noRoutesMsg" class="text-muted small mt-2 d-none">
               No routes available.
             </div>
           </div>
@@ -223,15 +215,11 @@
           <div class="col-md-8">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h6 class="text-secondary text-uppercase small mb-0">
-                Select a route to see its zones
+                Zones for selected truck
               </h6>
-              <button
-                id="confirmBtn"
-                class="btn btn-accent btn-sm"
-                type="button"
-                disabled
-              >
-                Confirm Route Collected
+
+              <button id="confirmBtn" class="btn btn-accent btn-sm" type="button" disabled>
+                Confirm Next Bin (Server)
               </button>
             </div>
 
@@ -239,10 +227,10 @@
               <table class="table table-dark table-hover mb-0 align-middle">
                 <thead>
                   <tr class="text-secondary small">
-                    <th style="width: 30%">Zone</th>
+                    <th style="width: 35%">Zone</th>
                     <th style="width: 15%">Bin ID</th>
                     <th style="width: 20%">Fill Level (%)</th>
-                    <th style="width: 35%">Status</th>
+                    <th style="width: 30%">Status</th>
                   </tr>
                 </thead>
                 <tbody id="zonesTableBody">
@@ -254,6 +242,12 @@
                 </tbody>
               </table>
             </div>
+
+            <div class="mt-3 small text-muted">
+              Tip: If you keep getting errors, verify the backend endpoints:
+              <code>/routes</code>, <code>/zones</code>, <code>/next-zone</code>, <code>/confirm-zone</code>.
+            </div>
+
           </div>
         </div>
       </div>
@@ -261,24 +255,11 @@
   </div>
 
   <!-- Toasts -->
-  <div
-    class="toast-container position-fixed bottom-0 start-50 translate-middle-x mb-3"
-  >
-    <div
-      id="mainToast"
-      class="toast align-items-center text-bg-dark border-0"
-      role="alert"
-      aria-live="assertive"
-      aria-atomic="true"
-    >
+  <div class="toast-container position-fixed bottom-0 start-50 translate-middle-x mb-3">
+    <div id="mainToast" class="toast align-items-center text-bg-dark border-0" role="alert" aria-live="assertive" aria-atomic="true">
       <div class="d-flex">
         <div id="toastBody" class="toast-body"></div>
-        <button
-          type="button"
-          class="btn-close btn-close-white me-2 m-auto"
-          data-bs-dismiss="toast"
-          aria-label="Close"
-        ></button>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
       </div>
     </div>
   </div>
@@ -288,9 +269,8 @@
 
   <script>
     // ================= CONFIG =================
-    //:
-   const API_BASE = "https://waste-optimizer-backend.onrender.com";
-
+    // IMPORTANT: Set this to your real Render backend URL
+    const API_BASE = "https://waste-optimizer-backend.onrender.com";
 
     // ================ STATE ====================
     let routes = [];
@@ -301,7 +281,6 @@
     function showToast(message, type = "info") {
       const toastEl = document.getElementById("mainToast");
       const toastBody = document.getElementById("toastBody");
-
       toastBody.textContent = message;
 
       toastEl.classList.remove("text-bg-dark", "text-bg-success", "text-bg-danger");
@@ -311,6 +290,18 @@
 
       const toast = new bootstrap.Toast(toastEl);
       toast.show();
+    }
+
+    // ============== SAFE FETCH WITH TIMEOUT ==============
+    async function fetchWithTimeout(url, options = {}, ms = 8000) {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), ms);
+      try {
+        const resp = await fetch(url, { ...options, signal: controller.signal });
+        return resp;
+      } finally {
+        clearTimeout(t);
+      }
     }
 
     // ============== RENDER FUNCTIONS ===========
@@ -328,8 +319,7 @@
       routes.forEach((r) => {
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className =
-          "route-item d-flex flex-column p-2 px-3 small gap-1";
+        btn.className = "route-item d-flex flex-column p-2 px-3 small gap-1";
 
         if (r.truckId === selectedTruckId) {
           btn.classList.add("active");
@@ -342,8 +332,7 @@
         const routeStr = (r.nodeSequence || []).join(" → ");
 
         const meta = document.createElement("div");
-        meta.className =
-          "route-meta d-flex flex-wrap gap-2 justify-content-between";
+        meta.className = "route-meta d-flex flex-wrap gap-2 justify-content-between";
         meta.innerHTML = `
           <span class="text-truncate" style="max-width: 230px">
             <span class="text-secondary">Route:</span>
@@ -351,15 +340,11 @@
           </span>
           <span>
             <span class="text-secondary">Dist:</span>
-            ${r.totalDistanceKm?.toFixed
-              ? r.totalDistanceKm.toFixed(1)
-              : r.totalDistanceKm || "-"} km
+            ${typeof r.totalDistanceKm === "number" ? r.totalDistanceKm.toFixed(1) : (r.totalDistanceKm ?? "-")} km
           </span>
           <span>
             <span class="text-secondary">Energy:</span>
-            ${r.totalEnergyKWh?.toFixed
-              ? r.totalEnergyKWh.toFixed(1)
-              : r.totalEnergyKWh || "-"} kWh
+            ${typeof r.totalEnergyKWh === "number" ? r.totalEnergyKWh.toFixed(1) : (r.totalEnergyKWh ?? "-")} kWh
           </span>
         `;
 
@@ -368,6 +353,9 @@
         if ((r.status || "").toLowerCase() === "collected") {
           statusSpan.classList.add("badge-collected");
           statusSpan.textContent = "Collected";
+        } else if ((r.status || "").toLowerCase() === "inprogress") {
+          statusSpan.classList.add("badge-pending");
+          statusSpan.textContent = "InProgress";
         } else {
           statusSpan.classList.add("badge-pending");
           statusSpan.textContent = "Pending";
@@ -381,8 +369,7 @@
           selectedTruckId = r.truckId;
           renderRoutes();
           renderZonesForRoute(selectedTruckId);
-          const confirmBtn = document.getElementById("confirmBtn");
-          confirmBtn.disabled = false;
+          document.getElementById("confirmBtn").disabled = false;
         });
 
         listEl.appendChild(btn);
@@ -403,12 +390,11 @@
         return;
       }
 
-      // Assume backend returns zones/bins with property truckId
       const routeZones = (zones || []).filter(
         (z) => String(z.truckId) === String(truckId)
       );
 
-      if (!routeZones || routeZones.length === 0) {
+      if (!routeZones.length) {
         tbody.innerHTML = `
           <tr>
             <td colspan="4" class="text-center text-muted small py-4">
@@ -421,20 +407,21 @@
       routeZones.forEach((z) => {
         const tr = document.createElement("tr");
 
+        // Correct backend fields: zone, binId, fillLevelPercent, status
         const zoneCell = document.createElement("td");
-        zoneCell.textContent = z.zoneName || z.area || "-";
+        zoneCell.textContent = z.zone ?? "-";
 
         const binIdCell = document.createElement("td");
-        binIdCell.textContent = z.id ?? z.binId ?? "-";
+        binIdCell.textContent = z.binId ?? "-";
 
         const fillCell = document.createElement("td");
-        const fill = z.fillLevelPercent ?? z.fillLevel ?? z.fill ?? null;
-        fillCell.textContent =
-          fill === null || fill === undefined ? "-" : `${fill} %`;
+        const fill = z.fillLevelPercent ?? null;
+        fillCell.textContent = fill == null ? "-" : `${fill} %`;
 
         const statusCell = document.createElement("td");
         const span = document.createElement("span");
         span.className = "badge badge-status";
+
         const statusText = (z.status || "Pending").toLowerCase();
         if (statusText === "collected") {
           span.classList.add("badge-collected");
@@ -458,14 +445,15 @@
     async function loadRoutes() {
       const spin = document.getElementById("refreshSpin");
       spin.classList.remove("d-none");
+
       try {
-        const resp = await fetch(`${API_BASE}/routes`);
-        if (!resp.ok) throw new Error("Failed to load routes");
+        const resp = await fetchWithTimeout(`${API_BASE}/routes`, {}, 8000);
+        if (!resp.ok) throw new Error(`Routes HTTP ${resp.status}`);
         routes = await resp.json();
         renderRoutes();
       } catch (err) {
         console.error(err);
-        showToast("Error loading routes from server", "error");
+        showToast("Error loading routes from server. Check API_BASE and backend.", "error");
       } finally {
         spin.classList.add("d-none");
       }
@@ -473,20 +461,23 @@
 
     async function loadZones() {
       try {
-        const resp = await fetch(`${API_BASE}/zones`);
-        if (!resp.ok) throw new Error("Failed to load zones");
+        const resp = await fetchWithTimeout(`${API_BASE}/zones`, {}, 8000);
+        if (!resp.ok) throw new Error(`Zones HTTP ${resp.status}`);
         zones = await resp.json();
-        if (selectedTruckId) {
-          renderZonesForRoute(selectedTruckId);
-        }
+        if (selectedTruckId) renderZonesForRoute(selectedTruckId);
       } catch (err) {
         console.error(err);
-        showToast("Error loading zones from server", "error");
+        showToast("Error loading zones from server. Check backend /zones endpoint.", "error");
       }
     }
 
-    // ============= CONFIRM ROUTE =================
-    async function confirmRouteCollected() {
+    async function refreshAll() {
+      await loadRoutes();
+      await loadZones();
+    }
+
+    // ============= CONFIRM NEXT BIN =================
+    async function confirmNextBinForSelectedTruck() {
       if (!selectedTruckId) {
         showToast("Please select a route first", "error");
         return;
@@ -497,43 +488,72 @@
       confirmBtn.innerText = "Confirming...";
 
       try {
-        const resp = await fetch(`${API_BASE}/confirm-route`, {
+        // 1) Ask for next pending zone
+        const nzResp = await fetchWithTimeout(`${API_BASE}/next-zone?truckId=${selectedTruckId}`, {}, 8000);
+        if (!nzResp.ok) throw new Error(`Next-zone HTTP ${nzResp.status}`);
+        const nzData = await nzResp.json();
+
+        if (!nzData.zone) {
+          showToast("No pending zones left for this truck.", "success");
+          await refreshAll();
+          return;
+        }
+
+        const zoneId = nzData.zone.id;
+
+        // 2) Confirm it on server (runs equations + updates digital twin)
+        const cResp = await fetchWithTimeout(`${API_BASE}/confirm-zone`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ truckId: selectedTruckId }),
-        });
+          body: JSON.stringify({ truckId: selectedTruckId, zoneId })
+        }, 12000);
 
-        if (!resp.ok) throw new Error("Failed to confirm route");
-        const data = await resp.json();
+        const cJson = await cResp.json().catch(() => ({}));
+        if (!cResp.ok) {
+          const msg = cJson.error || "Failed to confirm bin";
+          throw new Error(msg);
+        }
 
-        showToast(data.message || "Route confirmed successfully", "success");
+        showToast(cJson.message || "Bin confirmed successfully", "success");
 
-        await loadRoutes();
-        await loadZones();
+        // 3) Reload tables
+        await refreshAll();
+
       } catch (err) {
         console.error(err);
-        showToast("Failed to confirm route", "error");
+        showToast(`Confirm failed: ${err.message}`, "error");
       } finally {
         confirmBtn.disabled = false;
-        confirmBtn.innerText = "Confirm Route Collected";
+        confirmBtn.innerText = "Confirm Next Bin (Server)";
+      }
+    }
+
+    // ============= RESET DEMO =================
+    async function resetDemo() {
+      try {
+        const resp = await fetchWithTimeout(`${API_BASE}/reset`, { method: "POST" }, 8000);
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || `Reset HTTP ${resp.status}`);
+
+        showToast(data.message || "Reset done", "success");
+        selectedTruckId = null;
+        document.getElementById("confirmBtn").disabled = true;
+        await refreshAll();
+        renderZonesForRoute(null);
+
+      } catch (err) {
+        console.error(err);
+        showToast(`Reset failed: ${err.message}`, "error");
       }
     }
 
     // ============= INIT ==========================
     document.addEventListener("DOMContentLoaded", async () => {
-      document
-        .getElementById("refreshRoutesBtn")
-        .addEventListener("click", async () => {
-          await loadRoutes();
-          await loadZones();
-        });
+      document.getElementById("refreshRoutesBtn").addEventListener("click", refreshAll);
+      document.getElementById("confirmBtn").addEventListener("click", confirmNextBinForSelectedTruck);
+      document.getElementById("resetBtn").addEventListener("click", resetDemo);
 
-      document
-        .getElementById("confirmBtn")
-        .addEventListener("click", confirmRouteCollected);
-
-      await loadRoutes();
-      await loadZones();
+      await refreshAll();
     });
   </script>
 </body>
